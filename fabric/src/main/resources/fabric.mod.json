@@ -1,0 +1,28 @@
+{
+    "schemaVersion": 1,
+    "id": "comprehension",
+    "version": "${version}",
+    "name": "Comprehension",
+    "authors": [
+        "尹"
+    ],
+    "environment": "client",
+    "entrypoints": {
+        "client": [
+            {
+                "adapter": "kotlin",
+                "value": "me.yin.comprehension.Comprehension"
+            }
+        ]
+    },
+    "mixins": [
+        "comprehension.mixins.json"
+    ],
+    "depends": {
+        "fabricloader": ">=0.19.5",
+        "minecraft": "~26.3",
+        "java": ">=25",
+        "fabric-api": "*",
+        "fabric-language-kotlin": ">=1.14.2+kotlin.2.4.21"
+    }
+}
