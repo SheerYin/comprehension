@@ -247,11 +247,12 @@ class ControlServer(port: Int) {
 
             post("/mouse/move") {
                 val request = json.decodeFromString<MoveRequest>(call.receive<ByteArray>().decodeToString())
-                stepThenSettle {
-                    requireInFrame(request.x, request.y)
-                    moveCursor(request.x, request.y)
-                }
                 val state = withTimeout(timeout) {
+                    withContext(clientThread) {
+                        requireInFrame(request.x, request.y)
+                        moveCursor(request.x, request.y)
+                        Frames.afterTickAndFrame()
+                    }.await()
                     withContext(clientThread) { mouseState() }
                 }
                 respondJson(call, json.encodeToString(state))
@@ -264,26 +265,41 @@ class ControlServer(port: Int) {
                     "path needs at least two [x, y] points"
                 }
                 val (startX, startY) = request.path.first()
-                stepThenSettle {
-                    for ((x, y) in request.path) {
-                        requireInFrame(x, y)
-                    }
-                    moveCursor(startX, startY)
+                withTimeout(timeout) {
+                    withContext(clientThread) {
+                        for ((x, y) in request.path) {
+                            requireInFrame(x, y)
+                        }
+                        moveCursor(startX, startY)
+                        Frames.afterTickAndFrame()
+                    }.await()
                 }
-                stepThenSettle {
-                    minecraft.mouseHandler.onButton(minecraft.window.handle(), MouseButtonInfo(button, VirtualKeyboard.modifiers()), 1)
+                withTimeout(timeout) {
+                    withContext(clientThread) {
+                        minecraft.mouseHandler.onButton(minecraft.window.handle(), MouseButtonInfo(button, VirtualKeyboard.modifiers()), 1)
+                        Frames.afterTickAndFrame()
+                    }.await()
                 }
-                stepThenSettle {
-                    val nudgeX = if (startX + 1 < minecraft.window.width) startX + 1 else startX - 1
-                    moveCursor(nudgeX, startY)
+                withTimeout(timeout) {
+                    withContext(clientThread) {
+                        val nudgeX = if (startX + 1 < minecraft.window.width) startX + 1 else startX - 1
+                        moveCursor(nudgeX, startY)
+                        Frames.afterTickAndFrame()
+                    }.await()
                 }
                 for ((x, y) in request.path.drop(1)) {
-                    stepThenSettle { moveCursor(x, y) }
-                }
-                stepThenSettle {
-                    minecraft.mouseHandler.onButton(minecraft.window.handle(), MouseButtonInfo(button, VirtualKeyboard.modifiers()), 0)
+                    withTimeout(timeout) {
+                        withContext(clientThread) {
+                            moveCursor(x, y)
+                            Frames.afterTickAndFrame()
+                        }.await()
+                    }
                 }
                 val state = withTimeout(timeout) {
+                    withContext(clientThread) {
+                        minecraft.mouseHandler.onButton(minecraft.window.handle(), MouseButtonInfo(button, VirtualKeyboard.modifiers()), 0)
+                        Frames.afterTickAndFrame()
+                    }.await()
                     withContext(clientThread) { mouseState() }
                 }
                 respondJson(call, json.encodeToString(state))
@@ -292,10 +308,11 @@ class ControlServer(port: Int) {
             post("/mouse/press") {
                 val request = json.decodeFromString<ButtonRequest>(call.receive<ByteArray>().decodeToString())
                 val button = parseButton(request.button)
-                stepThenSettle {
-                    minecraft.mouseHandler.onButton(minecraft.window.handle(), MouseButtonInfo(button, VirtualKeyboard.modifiers()), 1)
-                }
                 val state = withTimeout(timeout) {
+                    withContext(clientThread) {
+                        minecraft.mouseHandler.onButton(minecraft.window.handle(), MouseButtonInfo(button, VirtualKeyboard.modifiers()), 1)
+                        Frames.afterTickAndFrame()
+                    }.await()
                     withContext(clientThread) { mouseState() }
                 }
                 respondJson(call, json.encodeToString(state))
@@ -304,10 +321,11 @@ class ControlServer(port: Int) {
             post("/mouse/release") {
                 val request = json.decodeFromString<ButtonRequest>(call.receive<ByteArray>().decodeToString())
                 val button = parseButton(request.button)
-                stepThenSettle {
-                    minecraft.mouseHandler.onButton(minecraft.window.handle(), MouseButtonInfo(button, VirtualKeyboard.modifiers()), 0)
-                }
                 val state = withTimeout(timeout) {
+                    withContext(clientThread) {
+                        minecraft.mouseHandler.onButton(minecraft.window.handle(), MouseButtonInfo(button, VirtualKeyboard.modifiers()), 0)
+                        Frames.afterTickAndFrame()
+                    }.await()
                     withContext(clientThread) { mouseState() }
                 }
                 respondJson(call, json.encodeToString(state))
@@ -317,10 +335,11 @@ class ControlServer(port: Int) {
                 val request = json.decodeFromString<ScrollRequest>(call.receive<ByteArray>().decodeToString())
                 require(request.dx != 0.0 || request.dy != 0.0) { "Give a non-zero dx or dy" }
                 require(kotlin.math.abs(request.dx) <= 50 && kotlin.math.abs(request.dy) <= 50) { "dx and dy must be between -50 and 50" }
-                stepThenSettle {
-                    minecraft.mouseHandler.onScroll(minecraft.window.handle(), request.dx, request.dy)
-                }
                 val state = withTimeout(timeout) {
+                    withContext(clientThread) {
+                        minecraft.mouseHandler.onScroll(minecraft.window.handle(), request.dx, request.dy)
+                        Frames.afterTickAndFrame()
+                    }.await()
                     withContext(clientThread) { mouseState() }
                 }
                 respondJson(call, json.encodeToString(state))
@@ -330,14 +349,15 @@ class ControlServer(port: Int) {
                 val request = json.decodeFromString<ButtonRequest>(call.receive<ByteArray>().decodeToString())
                 val button = parseButton(request.button)
                 require(request.count in 1..3) { "count must be 1, 2 or 3" }
-                stepThenSettle {
-                    val handle = minecraft.window.handle()
-                    repeat(request.count) {
-                        minecraft.mouseHandler.onButton(handle, MouseButtonInfo(button, VirtualKeyboard.modifiers()), 1)
-                        minecraft.mouseHandler.onButton(handle, MouseButtonInfo(button, VirtualKeyboard.modifiers()), 0)
-                    }
-                }
                 val state = withTimeout(timeout) {
+                    withContext(clientThread) {
+                        val handle = minecraft.window.handle()
+                        repeat(request.count) {
+                            minecraft.mouseHandler.onButton(handle, MouseButtonInfo(button, VirtualKeyboard.modifiers()), 1)
+                            minecraft.mouseHandler.onButton(handle, MouseButtonInfo(button, VirtualKeyboard.modifiers()), 0)
+                        }
+                        Frames.afterTickAndFrame()
+                    }.await()
                     withContext(clientThread) { mouseState() }
                 }
                 respondJson(call, json.encodeToString(state))
@@ -353,13 +373,14 @@ class ControlServer(port: Int) {
             post("/key/press") {
                 val request = json.decodeFromString<KeyRequest>(call.receive<ByteArray>().decodeToString())
                 val scancode = parseKey(request.key)
-                stepThenSettle {
-                    VirtualKeyboard.held.add(scancode)
-                    val modifiers = VirtualKeyboard.modifiers()
-                    val keycode = SDLKeyboard.SDL_GetKeyFromScancode(scancode, modifiers.toShort(), true)
-                    minecraft.keyboardHandler.keyPress(minecraft.window.handle(), 1, KeyEvent(scancode, keycode, modifiers))
-                }
                 val state = withTimeout(timeout) {
+                    withContext(clientThread) {
+                        VirtualKeyboard.held.add(scancode)
+                        val modifiers = VirtualKeyboard.modifiers()
+                        val keycode = SDLKeyboard.SDL_GetKeyFromScancode(scancode, modifiers.toShort(), true)
+                        minecraft.keyboardHandler.keyPress(minecraft.window.handle(), 1, KeyEvent(scancode, keycode, modifiers))
+                        Frames.afterTickAndFrame()
+                    }.await()
                     withContext(clientThread) { keyState() }
                 }
                 respondJson(call, json.encodeToString(state))
@@ -368,13 +389,14 @@ class ControlServer(port: Int) {
             post("/key/release") {
                 val request = json.decodeFromString<KeyRequest>(call.receive<ByteArray>().decodeToString())
                 val scancode = parseKey(request.key)
-                stepThenSettle {
-                    VirtualKeyboard.held.remove(scancode)
-                    val modifiers = VirtualKeyboard.modifiers()
-                    val keycode = SDLKeyboard.SDL_GetKeyFromScancode(scancode, modifiers.toShort(), true)
-                    minecraft.keyboardHandler.keyPress(minecraft.window.handle(), 0, KeyEvent(scancode, keycode, modifiers))
-                }
                 val state = withTimeout(timeout) {
+                    withContext(clientThread) {
+                        VirtualKeyboard.held.remove(scancode)
+                        val modifiers = VirtualKeyboard.modifiers()
+                        val keycode = SDLKeyboard.SDL_GetKeyFromScancode(scancode, modifiers.toShort(), true)
+                        minecraft.keyboardHandler.keyPress(minecraft.window.handle(), 0, KeyEvent(scancode, keycode, modifiers))
+                        Frames.afterTickAndFrame()
+                    }.await()
                     withContext(clientThread) { keyState() }
                 }
                 respondJson(call, json.encodeToString(state))
@@ -383,34 +405,36 @@ class ControlServer(port: Int) {
             post("/key/tap") {
                 val request = json.decodeFromString<KeyRequest>(call.receive<ByteArray>().decodeToString())
                 val scancode = parseKey(request.key)
-                stepThenSettle {
-                    val handle = minecraft.window.handle()
-                    VirtualKeyboard.held.add(scancode)
-                    val pressModifiers = VirtualKeyboard.modifiers()
-                    val pressKeycode = SDLKeyboard.SDL_GetKeyFromScancode(scancode, pressModifiers.toShort(), true)
-                    minecraft.keyboardHandler.keyPress(handle, 1, KeyEvent(scancode, pressKeycode, pressModifiers))
-                    VirtualKeyboard.held.remove(scancode)
-                    val releaseModifiers = VirtualKeyboard.modifiers()
-                    val releaseKeycode = SDLKeyboard.SDL_GetKeyFromScancode(scancode, releaseModifiers.toShort(), true)
-                    minecraft.keyboardHandler.keyPress(handle, 0, KeyEvent(scancode, releaseKeycode, releaseModifiers))
-                }
                 val state = withTimeout(timeout) {
+                    withContext(clientThread) {
+                        val handle = minecraft.window.handle()
+                        VirtualKeyboard.held.add(scancode)
+                        val pressModifiers = VirtualKeyboard.modifiers()
+                        val pressKeycode = SDLKeyboard.SDL_GetKeyFromScancode(scancode, pressModifiers.toShort(), true)
+                        minecraft.keyboardHandler.keyPress(handle, 1, KeyEvent(scancode, pressKeycode, pressModifiers))
+                        VirtualKeyboard.held.remove(scancode)
+                        val releaseModifiers = VirtualKeyboard.modifiers()
+                        val releaseKeycode = SDLKeyboard.SDL_GetKeyFromScancode(scancode, releaseModifiers.toShort(), true)
+                        minecraft.keyboardHandler.keyPress(handle, 0, KeyEvent(scancode, releaseKeycode, releaseModifiers))
+                        Frames.afterTickAndFrame()
+                    }.await()
                     withContext(clientThread) { keyState() }
                 }
                 respondJson(call, json.encodeToString(state))
             }
 
             post("/key/release-all") {
-                stepThenSettle {
-                    val handle = minecraft.window.handle()
-                    for (scancode in VirtualKeyboard.held.toList()) {
-                        VirtualKeyboard.held.remove(scancode)
-                        val modifiers = VirtualKeyboard.modifiers()
-                        val keycode = SDLKeyboard.SDL_GetKeyFromScancode(scancode, modifiers.toShort(), true)
-                        minecraft.keyboardHandler.keyPress(handle, 0, KeyEvent(scancode, keycode, modifiers))
-                    }
-                }
                 val state = withTimeout(timeout) {
+                    withContext(clientThread) {
+                        val handle = minecraft.window.handle()
+                        for (scancode in VirtualKeyboard.held.toList()) {
+                            VirtualKeyboard.held.remove(scancode)
+                            val modifiers = VirtualKeyboard.modifiers()
+                            val keycode = SDLKeyboard.SDL_GetKeyFromScancode(scancode, modifiers.toShort(), true)
+                            minecraft.keyboardHandler.keyPress(handle, 0, KeyEvent(scancode, keycode, modifiers))
+                        }
+                        Frames.afterTickAndFrame()
+                    }.await()
                     withContext(clientThread) { keyState() }
                 }
                 respondJson(call, json.encodeToString(state))
@@ -418,10 +442,11 @@ class ControlServer(port: Int) {
 
             post("/key/type") {
                 val request = json.decodeFromString<TypeRequest>(call.receive<ByteArray>().decodeToString())
-                stepThenSettle {
-                    minecraft.keyboardHandler.textInput(minecraft.window.handle(), request.text)
-                }
                 val state = withTimeout(timeout) {
+                    withContext(clientThread) {
+                        minecraft.keyboardHandler.textInput(minecraft.window.handle(), request.text)
+                        Frames.afterTickAndFrame()
+                    }.await()
                     withContext(clientThread) { keyState() }
                 }
                 respondJson(call, json.encodeToString(state))
@@ -690,16 +715,6 @@ class ControlServer(port: Int) {
             screen = minecraft.gui.screen()?.javaClass?.name,
             loading = minecraft.gui.overlay() != null
         )
-    }
-
-    private suspend fun stepThenSettle(step: () -> Unit) {
-        val frame = withTimeout(timeout) {
-            withContext(clientThread) {
-                step()
-                Frames.afterTickAndFrame()
-            }
-        }
-        withTimeout(timeout) { frame.await() }
     }
 
     private fun requireInFrame(x: Double, y: Double) {
