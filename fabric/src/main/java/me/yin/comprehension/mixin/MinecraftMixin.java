@@ -1,5 +1,6 @@
 package me.yin.comprehension.mixin;
 
+import me.yin.comprehension.Frames;
 import me.yin.comprehension.Screenshots;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.OptionInstance;
@@ -18,6 +19,7 @@ public class MinecraftMixin {
     )
     private void comprehension$afterFrameRendered(boolean advanceGameTime, CallbackInfo ci) {
         Screenshots.onFrameRendered();
+        Frames.onFrameRendered();
     }
 
     @Redirect(

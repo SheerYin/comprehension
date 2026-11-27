@@ -44,6 +44,9 @@ data class MouseState(
 data class MoveRequest(val x: Double, val y: Double)
 
 @Serializable
+data class DragRequest(val button: String = "left", val path: List<List<Double>>)
+
+@Serializable
 data class ButtonRequest(val button: String = "left", val count: Int = 1)
 
 @Serializable
@@ -99,18 +102,44 @@ class ControlServer(port: Int) {
 
             post("/mouse/move") {
                 val request = json.decodeFromString<MoveRequest>(call.receive<ByteArray>().decodeToString())
+                stepThenFrame {
+                    requireInFrame(request.x, request.y)
+                    moveCursor(request.x, request.y)
+                }
                 val state = withTimeout(timeout) {
-                    withContext(clientThread) {
-                        val window = minecraft.window
-                        require(request.x >= 0 && request.x < window.width && request.y >= 0 && request.y < window.height) {
-                            "Point (${request.x}, ${request.y}) is outside the ${window.width}x${window.height} frame"
-                        }
-                        val mouse = minecraft.mouseHandler
-                        val xpos = request.x * window.screenWidth / window.width
-                        val ypos = request.y * window.screenHeight / window.height
-                        mouse.onMove(window.handle(), xpos, ypos, xpos - mouse.xpos(), ypos - mouse.ypos())
-                        mouseState()
+                    withContext(clientThread) { mouseState() }
+                }
+                respondJson(call, json.encodeToString(state))
+            }
+
+            post("/mouse/drag") {
+                val request = json.decodeFromString<DragRequest>(call.receive<ByteArray>().decodeToString())
+                val button = parseButton(request.button)
+                require(request.path.size >= 2 && request.path.all { it.size == 2 }) {
+                    "path needs at least two [x, y] points"
+                }
+                val (startX, startY) = request.path.first()
+                stepThenFrame {
+                    for ((x, y) in request.path) {
+                        requireInFrame(x, y)
                     }
+                    moveCursor(startX, startY)
+                }
+                stepThenFrame {
+                    minecraft.mouseHandler.onButton(minecraft.window.handle(), MouseButtonInfo(button, VirtualKeyboard.modifiers()), 1)
+                }
+                stepThenFrame {
+                    val nudgeX = if (startX + 1 < minecraft.window.width) startX + 1 else startX - 1
+                    moveCursor(nudgeX, startY)
+                }
+                for ((x, y) in request.path.drop(1)) {
+                    stepThenFrame { moveCursor(x, y) }
+                }
+                stepThenFrame {
+                    minecraft.mouseHandler.onButton(minecraft.window.handle(), MouseButtonInfo(button, VirtualKeyboard.modifiers()), 0)
+                }
+                val state = withTimeout(timeout) {
+                    withContext(clientThread) { mouseState() }
                 }
                 respondJson(call, json.encodeToString(state))
             }
@@ -306,6 +335,31 @@ class ControlServer(port: Int) {
             screen = minecraft.gui.screen()?.javaClass?.name,
             overlay = minecraft.gui.overlay()?.javaClass?.name
         )
+    }
+
+    private suspend fun stepThenFrame(step: () -> Unit) {
+        val frame = withTimeout(timeout) {
+            withContext(clientThread) {
+                step()
+                Frames.next()
+            }
+        }
+        withTimeout(timeout) { frame.await() }
+    }
+
+    private fun requireInFrame(x: Double, y: Double) {
+        val window = minecraft.window
+        require(x >= 0 && x < window.width && y >= 0 && y < window.height) {
+            "Point ($x, $y) is outside the ${window.width}x${window.height} frame"
+        }
+    }
+
+    private fun moveCursor(x: Double, y: Double) {
+        val window = minecraft.window
+        val mouse = minecraft.mouseHandler
+        val xpos = x * window.screenWidth / window.width
+        val ypos = y * window.screenHeight / window.height
+        mouse.onMove(window.handle(), xpos, ypos, xpos - mouse.xpos(), ypos - mouse.ypos())
     }
 
     private fun keyState(): KeyState {

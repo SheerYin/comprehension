@@ -24,7 +24,8 @@ Mouse coordinates are pixels in the screenshot. `GET /mouse` returns the frame s
 |---|---|---|
 | `GET /screenshot` | | PNG of the next rendered frame, with the virtual cursor drawn in |
 | `GET /mouse` | | Cursor position, frame size, whether the mouse is grabbed, current screen and overlay |
-| `POST /mouse/move` | `{"x":425,"y":447}` | Move the cursor |
+| `POST /mouse/move` | `{"x":425,"y":447}` | Move the cursor; returns after the next frame has rendered |
+| `POST /mouse/drag` | `{"button":"left","path":[[584,531],[638,531],[692,531]]}` | Press at the first point, move through the rest, release |
 | `POST /mouse/press` | `{"button":"left"}` | Press a button (`left`, `right`, `middle`) |
 | `POST /mouse/release` | `{"button":"left"}` | Release a button |
 | `POST /mouse/click` | `{"button":"left","count":2}` | Press and release; `count` 2 is a double click |
@@ -50,8 +51,8 @@ While the mouse is grabbed (in game with no screen open), moving the mouse turns
 ## Timing rules
 
 - Input sent while `overlay` is not null (for example `LoadingOverlay` during a resource pack reload) is dropped by the game. Wait until `overlay` is `null`.
-- A key that acts on the hovered slot (number keys, `q`) uses the hover from the last rendered frame. Sleep about 100 ms between moving onto a slot and pressing the key.
-- Dragging items across slots: press on the first slot, move a few pixels inside that same slot, then move across the other slots with a short sleep between moves, then release. The game only adds a slot to the drag when a move happens over it, so jumping straight off the first slot skips it.
+- `POST /mouse/move` returns after the next frame has rendered, so hover is up to date: a number key or `q` sent right after a move acts on the new slot.
+- To spread a carried stack across slots, use `POST /mouse/drag` with one point per slot (`left` splits evenly, `right` places one per slot). It moves one frame per point and nudges inside the first slot after pressing, so every slot on the path is included.
 - Keys pressed in game (no screen open) take effect on the next tick; the reply does not show the result yet.
 
 ## Side effects
