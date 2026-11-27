@@ -47,6 +47,9 @@ data class MoveRequest(val x: Double, val y: Double)
 data class DragRequest(val button: String = "left", val path: List<List<Double>>)
 
 @Serializable
+data class ScrollRequest(val dx: Double = 0.0, val dy: Double = 0.0)
+
+@Serializable
 data class ButtonRequest(val button: String = "left", val count: Int = 1)
 
 @Serializable
@@ -161,6 +164,19 @@ class ControlServer(port: Int) {
                 val button = parseButton(request.button)
                 stepThenSettle {
                     minecraft.mouseHandler.onButton(minecraft.window.handle(), MouseButtonInfo(button, VirtualKeyboard.modifiers()), 0)
+                }
+                val state = withTimeout(timeout) {
+                    withContext(clientThread) { mouseState() }
+                }
+                respondJson(call, json.encodeToString(state))
+            }
+
+            post("/mouse/scroll") {
+                val request = json.decodeFromString<ScrollRequest>(call.receive<ByteArray>().decodeToString())
+                require(request.dx != 0.0 || request.dy != 0.0) { "Give a non-zero dx or dy" }
+                require(kotlin.math.abs(request.dx) <= 50 && kotlin.math.abs(request.dy) <= 50) { "dx and dy must be between -50 and 50" }
+                stepThenSettle {
+                    minecraft.mouseHandler.onScroll(minecraft.window.handle(), request.dx, request.dy)
                 }
                 val state = withTimeout(timeout) {
                     withContext(clientThread) { mouseState() }

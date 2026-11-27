@@ -43,6 +43,7 @@ Mouse coordinates are pixels in the screenshot. `GET /mouse` returns the frame s
 | `POST /mouse/drag` | `{"button":"left","path":[[584,531],[638,531],[692,531]]}` | Press at the first point, move through the rest, release |
 | `POST /mouse/press` | `{"button":"left"}` | Press a button (`left`, `right`, `middle`) |
 | `POST /mouse/release` | `{"button":"left"}` | Release a button |
+| `POST /mouse/scroll` | `{"dy":-3}` | Scroll the wheel at the cursor; negative `dy` scrolls down, `dx` scrolls sideways. In game with no screen open it changes the hotbar slot |
 | `POST /mouse/click` | `{"button":"left","count":2}` | Press and release; `count` 2 is a double click |
 | `GET /key` | | Keys currently held, current screen and overlay |
 | `POST /key/press` | `{"key":"w"}` | Press and hold a key |
