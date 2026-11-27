@@ -2,13 +2,25 @@ package me.yin.comprehension
 
 import kotlinx.coroutines.CompletableDeferred
 
-object Frames {
-    private val waiting = ArrayList<CompletableDeferred<Unit>>()
+class FrameWaiter {
+    var ticked = false
+    val done = CompletableDeferred<Unit>()
+}
 
-    fun next(): CompletableDeferred<Unit> {
-        val frame = CompletableDeferred<Unit>()
-        waiting.add(frame)
-        return frame
+object Frames {
+    private val waiting = ArrayList<FrameWaiter>()
+
+    fun afterTickAndFrame(): CompletableDeferred<Unit> {
+        val waiter = FrameWaiter()
+        waiting.add(waiter)
+        return waiter.done
+    }
+
+    @JvmStatic
+    fun onClientTick() {
+        for (waiter in waiting) {
+            waiter.ticked = true
+        }
     }
 
     @JvmStatic
@@ -16,10 +28,10 @@ object Frames {
         if (waiting.isEmpty()) {
             return
         }
-        val rendered = waiting.toList()
-        waiting.clear()
-        for (frame in rendered) {
-            frame.complete(Unit)
+        val settled = waiting.filter { it.ticked }
+        waiting.removeAll(settled)
+        for (waiter in settled) {
+            waiter.done.complete(Unit)
         }
     }
 }

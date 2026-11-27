@@ -18,7 +18,11 @@ kotlin {
 loom {
     runs {
         named("client") {
-            programArgs("--width", "1600", "--height", "900", "--username", "Agent")
+            programArgs(
+                "--width", providers.gradleProperty("clientWidth").getOrElse("1600"),
+                "--height", providers.gradleProperty("clientHeight").getOrElse("900"),
+                "--username", providers.gradleProperty("clientUsername").getOrElse("Agent")
+            )
         }
     }
 }

@@ -50,3 +50,6 @@ crash-reports/
 
 ### Fabric ###
 run/
+
+### Extra client instances ###
+runs/
