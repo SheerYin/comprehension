@@ -14,6 +14,7 @@ import io.ktor.server.response.respondText
 import io.ktor.server.routing.get
 import io.ktor.server.routing.post
 import io.ktor.server.routing.routing
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.TimeoutCancellationException
 import kotlinx.coroutines.asCoroutineDispatcher
 import kotlinx.coroutines.withContext
@@ -47,6 +48,7 @@ data class MouseState(
     val width: Int,
     val height: Int,
     val grabbed: Boolean,
+    val held: List<String>,
     val screen: String?,
     val loading: Boolean
 )
@@ -260,7 +262,7 @@ class ControlServer(port: Int) {
 
             post("/mouse/drag") {
                 val request = json.decodeFromString<DragRequest>(call.receive<ByteArray>().decodeToString())
-                val button = parseButton(request.button)
+                val button = MouseButton.parse(request.button)
                 require(request.path.size >= 2 && request.path.all { it.size == 2 }) {
                     "path needs at least two [x, y] points"
                 }
@@ -274,43 +276,55 @@ class ControlServer(port: Int) {
                         Frames.afterTickAndFrame()
                     }.await()
                 }
-                withTimeout(timeout) {
-                    withContext(clientThread) {
-                        minecraft.mouseHandler.onButton(minecraft.window.handle(), MouseButtonInfo(button, VirtualKeyboard.modifiers()), 1)
-                        Frames.afterTickAndFrame()
-                    }.await()
-                }
-                withTimeout(timeout) {
-                    withContext(clientThread) {
-                        val nudgeX = if (startX + 1 < minecraft.window.width) startX + 1 else startX - 1
-                        moveCursor(nudgeX, startY)
-                        Frames.afterTickAndFrame()
-                    }.await()
-                }
-                for ((x, y) in request.path.drop(1)) {
+                val state = try {
                     withTimeout(timeout) {
                         withContext(clientThread) {
-                            moveCursor(x, y)
+                            pressButton(button)
                             Frames.afterTickAndFrame()
                         }.await()
                     }
-                }
-                val state = withTimeout(timeout) {
-                    withContext(clientThread) {
-                        minecraft.mouseHandler.onButton(minecraft.window.handle(), MouseButtonInfo(button, VirtualKeyboard.modifiers()), 0)
-                        Frames.afterTickAndFrame()
-                    }.await()
-                    withContext(clientThread) { mouseState() }
+                    withTimeout(timeout) {
+                        withContext(clientThread) {
+                            val nudgeX = if (startX + 1 < minecraft.window.width) startX + 1 else startX - 1
+                            moveCursor(nudgeX, startY)
+                            Frames.afterTickAndFrame()
+                        }.await()
+                    }
+                    for ((x, y) in request.path.drop(1)) {
+                        withTimeout(timeout) {
+                            withContext(clientThread) {
+                                moveCursor(x, y)
+                                Frames.afterTickAndFrame()
+                            }.await()
+                        }
+                    }
+                    withTimeout(timeout) {
+                        withContext(clientThread) {
+                            releaseButton(button)
+                            Frames.afterTickAndFrame()
+                        }.await()
+                        withContext(clientThread) { mouseState() }
+                    }
+                } finally {
+                    withContext(NonCancellable) {
+                        withTimeout(timeout) {
+                            withContext(clientThread) {
+                                if (button in MouseButton.held) {
+                                    releaseButton(button)
+                                }
+                            }
+                        }
+                    }
                 }
                 respondJson(call, json.encodeToString(state))
             }
 
             post("/mouse/press") {
                 val request = json.decodeFromString<ButtonRequest>(call.receive<ByteArray>().decodeToString())
-                val button = parseButton(request.button)
+                val button = MouseButton.parse(request.button)
                 val state = withTimeout(timeout) {
                     withContext(clientThread) {
-                        minecraft.mouseHandler.onButton(minecraft.window.handle(), MouseButtonInfo(button, VirtualKeyboard.modifiers()), 1)
+                        pressButton(button)
                         Frames.afterTickAndFrame()
                     }.await()
                     withContext(clientThread) { mouseState() }
@@ -320,10 +334,23 @@ class ControlServer(port: Int) {
 
             post("/mouse/release") {
                 val request = json.decodeFromString<ButtonRequest>(call.receive<ByteArray>().decodeToString())
-                val button = parseButton(request.button)
+                val button = MouseButton.parse(request.button)
                 val state = withTimeout(timeout) {
                     withContext(clientThread) {
-                        minecraft.mouseHandler.onButton(minecraft.window.handle(), MouseButtonInfo(button, VirtualKeyboard.modifiers()), 0)
+                        releaseButton(button)
+                        Frames.afterTickAndFrame()
+                    }.await()
+                    withContext(clientThread) { mouseState() }
+                }
+                respondJson(call, json.encodeToString(state))
+            }
+
+            post("/mouse/release-all") {
+                val state = withTimeout(timeout) {
+                    withContext(clientThread) {
+                        for (button in MouseButton.held.toList()) {
+                            releaseButton(button)
+                        }
                         Frames.afterTickAndFrame()
                     }.await()
                     withContext(clientThread) { mouseState() }
@@ -347,14 +374,13 @@ class ControlServer(port: Int) {
 
             post("/mouse/click") {
                 val request = json.decodeFromString<ButtonRequest>(call.receive<ByteArray>().decodeToString())
-                val button = parseButton(request.button)
+                val button = MouseButton.parse(request.button)
                 require(request.count in 1..3) { "count must be 1, 2 or 3" }
                 val state = withTimeout(timeout) {
                     withContext(clientThread) {
-                        val handle = minecraft.window.handle()
                         repeat(request.count) {
-                            minecraft.mouseHandler.onButton(handle, MouseButtonInfo(button, VirtualKeyboard.modifiers()), 1)
-                            minecraft.mouseHandler.onButton(handle, MouseButtonInfo(button, VirtualKeyboard.modifiers()), 0)
+                            pressButton(button)
+                            releaseButton(button)
                         }
                         Frames.afterTickAndFrame()
                     }.await()
@@ -712,6 +738,7 @@ class ControlServer(port: Int) {
             width = window.width,
             height = window.height,
             grabbed = mouse.isMouseGrabbed,
+            held = MouseButton.held.map { it.apiName },
             screen = minecraft.gui.screen()?.javaClass?.name,
             loading = minecraft.gui.overlay() != null
         )
@@ -758,13 +785,15 @@ class ControlServer(port: Int) {
         return key.value
     }
 
-    private fun parseButton(name: String): Int =
-        when (name) {
-            "left" -> InputConstants.MOUSE_BUTTON_LEFT
-            "right" -> InputConstants.MOUSE_BUTTON_RIGHT
-            "middle" -> InputConstants.MOUSE_BUTTON_MIDDLE
-            else -> throw IllegalArgumentException("Unknown button '$name', expected left, right or middle")
-        }
+    private fun pressButton(button: MouseButton) {
+        MouseButton.held.add(button)
+        minecraft.mouseHandler.onButton(minecraft.window.handle(), MouseButtonInfo(button.code, VirtualKeyboard.modifiers()), 1)
+    }
+
+    private fun releaseButton(button: MouseButton) {
+        MouseButton.held.remove(button)
+        minecraft.mouseHandler.onButton(minecraft.window.handle(), MouseButtonInfo(button.code, VirtualKeyboard.modifiers()), 0)
+    }
 
     private suspend fun respondJson(call: ApplicationCall, body: String) {
         call.respondText(body, ContentType.Application.Json)

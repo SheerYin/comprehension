@@ -17,10 +17,13 @@ if [ ! -f "$LAUNCH_CFG" ] || [ ! -f "$ARG_FILE" ]; then
     exit 1
 fi
 
+PARENT_PID="$(cat "/proc/$PPID/winpid" 2>/dev/null || true)"
+
 mkdir -p "$GAME_DIR"
 cd "$GAME_DIR"
 exec "${JAVA:-java}" \
     "-Dcomprehension.port=$PORT" \
+    ${PARENT_PID:+"-Dcomprehension.parentPid=$PARENT_PID"} \
     "-Dfabric.dli.config=$LAUNCH_CFG" \
     -Dfabric.dli.env=client \
     -Dfabric.dli.main=net.fabricmc.loader.impl.launch.knot.KnotClient \

@@ -14,7 +14,7 @@ The GUI scale is fixed to auto; override with `-Dcomprehension.guiScale=<n>`.
 
 ## Several clients at once
 
-`scripts/client.sh <n> [username] [width] [height]` starts instance `n` directly with Java, without Gradle, so several can run together. Instance `n` uses the game directory `fabric/runs/<n>`, port `25592 + n`, and the username `Agent<n>` unless given. Run `./gradlew build` and `./gradlew :fabric:runClient` once first so the Loom launch files exist, and rerun `./gradlew build` after code changes.
+`scripts/client.sh <n> [username] [width] [height]` starts instance `n` directly with Java, without Gradle, so several can run together. Instance `n` uses the game directory `fabric/runs/<n>`, port `25592 + n`, and the username `Agent<n>` unless given. Run `./gradlew build` and `./gradlew :fabric:runClient` once first so the Loom launch files exist, and rerun `./gradlew build` after code changes. The client exits when the shell that ran the script exits, so stopping a background task or killing its wrapper shell also closes the game. The script passes that shell's Windows process ID as `-Dcomprehension.parentPid=<pid>`; the client polls it once a second and shuts down normally when it is gone.
 
 ```sh
 scripts/client.sh 1   # Agent1 on http://127.0.0.1:25593
@@ -38,11 +38,12 @@ Mouse coordinates are pixels in the screenshot. `GET /mouse` returns the frame s
 | Method and path | Body | Effect |
 |---|---|---|
 | `GET /screenshot` | | PNG of the next rendered frame, with the virtual cursor drawn in |
-| `GET /mouse` | | Cursor position, frame size, whether the mouse is grabbed, current screen, whether the game is loading |
+| `GET /mouse` | | Cursor position, frame size, whether the mouse is grabbed, buttons currently held, current screen, whether the game is loading |
 | `POST /mouse/move` | `{"x":425,"y":447}` | Move the cursor |
-| `POST /mouse/drag` | `{"button":"left","path":[[584,531],[638,531],[692,531]]}` | Press at the first point, move through the rest, release |
+| `POST /mouse/drag` | `{"button":"left","path":[[584,531],[638,531],[692,531]]}` | Press at the first point, move through the rest, release. If the drag fails partway, the button is still released |
 | `POST /mouse/press` | `{"button":"left"}` | Press a button (`left`, `right`, `middle`) |
 | `POST /mouse/release` | `{"button":"left"}` | Release a button |
+| `POST /mouse/release-all` | | Release every held button |
 | `POST /mouse/scroll` | `{"dy":-3}` | Scroll the wheel at the cursor; negative `dy` scrolls down, `dx` scrolls sideways. In game with no screen open it changes the hotbar slot |
 | `POST /mouse/click` | `{"button":"left","count":2}` | Press and release; `count` 2 is a double click |
 | `GET /key` | | Keys currently held, current screen, whether the game is loading |
