@@ -19,8 +19,8 @@ loom {
     runs {
         named("client") {
             programArgs(
-                "--width", providers.gradleProperty("clientWidth").getOrElse("1600"),
-                "--height", providers.gradleProperty("clientHeight").getOrElse("900"),
+                "--width", providers.gradleProperty("clientWidth").getOrElse("1280"),
+                "--height", providers.gradleProperty("clientHeight").getOrElse("720"),
                 "--username", providers.gradleProperty("clientUsername").getOrElse("Agent")
             )
         }

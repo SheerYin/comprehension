@@ -4,17 +4,17 @@ Comprehension is a Fabric client mod that lets an agent drive Minecraft through 
 
 The server listens on `http://127.0.0.1:25592` (override with `-Dcomprehension.port=<port>`). Use `127.0.0.1`, not `localhost`: on Windows, `localhost` tries IPv6 first and adds about 200 ms to every request.
 
-The dev client (`./gradlew :fabric:runClient`) starts with a 1600x900 window and the offline username `Agent`. Override them with Gradle properties:
+The dev client (`./gradlew :fabric:runClient`) starts with a 1280x720 window and the offline username `Agent`. Override them with Gradle properties:
 
 ```sh
 ./gradlew :fabric:runClient -PclientUsername=Tester -PclientWidth=1920 -PclientHeight=1080
 ```
 
-The GUI scale is fixed to auto; override with `-Dcomprehension.guiScale=<n>`.
+The GUI scale is fixed to auto; override with `-Dcomprehension.guiScale=<n>`. The frame rate is capped at 30 regardless of `options.txt`; override with `-Dcomprehension.maxFps=<n>`.
 
 ## Several clients at once
 
-`scripts/client.sh <n> [username] [width] [height]` starts instance `n` directly with Java, without Gradle, so several can run together. Instance `n` uses the game directory `fabric/runs/<n>`, port `25592 + n`, and the username `Agent<n>` unless given. Run `./gradlew build` and `./gradlew :fabric:runClient` once first so the Loom launch files exist, and rerun `./gradlew build` after code changes. The client exits when the shell that ran the script exits, so stopping a background task or killing its wrapper shell also closes the game. The script passes that shell's Windows process ID as `-Dcomprehension.parentPid=<pid>`; the client polls it once a second and shuts down normally when it is gone.
+`scripts/client.sh <n> [username] [width] [height]` starts instance `n` directly with Java, without Gradle, so several can run together. Instance `n` uses the game directory `fabric/runs/<n>`, port `25592 + n`, and the username `Agent<n>` unless given. Run `./gradlew build` and `./gradlew :fabric:runClient` once first so the Loom launch files exist, and rerun `./gradlew build` after code changes. The script starts the game window hidden: it never appears on the desktop or taskbar and never takes focus, while rendering, input and screenshots work as usual. Run `HIDDEN=false scripts/client.sh <n>` to see the window. The Gradle `runClient` window stays visible; pass `-Dcomprehension.hidden=true` to hide it. The client exits when the shell that ran the script exits, so stopping a background task or killing its wrapper shell also closes the game. The script passes that shell's Windows process ID as `-Dcomprehension.parentPid=<pid>`; the client polls it once a second and shuts down normally when it is gone.
 
 ```sh
 scripts/client.sh 1   # Agent1 on http://127.0.0.1:25593

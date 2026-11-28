@@ -13,6 +13,7 @@ The agent works like a player looking at the screen: it moves a virtual mouse, c
 - Clipboard, URL and file actions are recorded instead of reaching the computer
 - Every input call returns after the client has run a tick and rendered a frame
 - Several clients can run at once, each with its own game directory, port and username
+- Clients started by the script run with a hidden window that never appears on the desktop
 
 ## Requirements
 

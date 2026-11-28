@@ -3,8 +3,9 @@ set -e
 
 N="${1:?usage: scripts/client.sh <instance number> [username] [width] [height]}"
 USERNAME="${2:-Agent$N}"
-WIDTH="${3:-1600}"
-HEIGHT="${4:-900}"
+WIDTH="${3:-1280}"
+HEIGHT="${4:-720}"
+HIDDEN="${HIDDEN:-true}"
 PORT=$((25592 + N))
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd -W)"
@@ -24,6 +25,7 @@ cd "$GAME_DIR"
 exec "${JAVA:-java}" \
     "-Dcomprehension.port=$PORT" \
     ${PARENT_PID:+"-Dcomprehension.parentPid=$PARENT_PID"} \
+    "-Dcomprehension.hidden=$HIDDEN" \
     "-Dfabric.dli.config=$LAUNCH_CFG" \
     -Dfabric.dli.env=client \
     -Dfabric.dli.main=net.fabricmc.loader.impl.launch.knot.KnotClient \
